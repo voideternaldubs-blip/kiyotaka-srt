@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiyotaka Dubla — Gerador de SRT</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+  --red: #FF2D55; --yellow: #FFD60A; --dark: #08080E;
+  --card: #111118; --card2: #1A1A24; --text: #F0F0F5;
+  --muted: #5A5A70; --green: #30D158; --border: #ffffff0C;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--dark); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+
+header {
+  background: linear-gradient(135deg, #08080E 0%, #160820 50%, #08080E 100%);
+  border-bottom: 1px solid #FF2D5518;
+  padding: 20px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+}
+.logo { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; }
+.logo span { color:var(--red); }
+.api-wrap { display:flex; align-items:center; gap:8px; }
+.api-input {
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 14px; color: var(--text);
+  font-size: 12px; width: 260px; outline:none;
+  font-family: monospace; letter-spacing: 1px;
+  transition: border-color 0.2s;
+}
+.api-input:focus { border-color: #FF2D5540; }
+.api-label { font-size: 11px; color: var(--muted); white-space:nowrap; }
+.api-status { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink:0; }
+.api-status.ok { background: var(--green); }
+.api-status.err { background: var(--red); }
+
+main { max-width: 1000px; margin: 0 auto; padding: 32px 20px 60px; }
+
+/* DROP */
+.drop-zone {
+  border: 2px dashed #FF2D5535; border-radius: 20px; padding: 52px 32px;
+  text-align: center; cursor: pointer; background: #FF2D5508;
+  transition: all 0.25s; position: relative; margin-bottom: 24px;
+}
+.drop-zone:hover, .drop-zone.over { border-color: var(--red); background: #FF2D5512; }
+.drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; }
+.drop-icon { font-size: 48px; margin-bottom: 14px; }
+.drop-title { font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:2px; margin-bottom:6px; }
+.drop-sub { font-size: 13px; color: var(--muted); }
+
+/* FILE LIST */
+.file-list { display:flex; flex-direction:column; gap:6px; margin-bottom:20px; }
+.file-item {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  transition: border-color 0.2s;
+}
+.file-item.done { border-color: #30D15820; }
+.file-item.err { border-color: #FF2D5520; }
+.file-item.proc { border-color: #FFD60A20; }
+.file-icon { font-size: 18px; flex-shrink:0; }
+.file-name { flex:1; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-status { font-size:11px; padding:3px 10px; border-radius:20px; flex-shrink:0; font-weight:600; }
+.s-wait { background:#ffffff08; color:var(--muted); }
+.s-proc { background:#FFD60A15; color:var(--yellow); }
+.s-done { background:#30D15815; color:var(--green); }
+.s-err  { background:#FF2D5515; color:var(--red); }
+
+/* PROGRESS */
+.progress-wrap { margin-bottom:20px; display:none; }
+.progress-label { font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; justify-content:space-between; }
+.progress-bar { background:#ffffff08; border-radius:8px; height:6px; overflow:hidden; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--red),var(--yellow)); border-radius:8px; transition:width 0.5s; width:0%; }
+
+/* LOG */
+.log-box {
+  background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:14px 16px; font-size:12px; max-height:130px; overflow-y:auto;
+  display:none; margin-bottom:20px; font-family:monospace; line-height:2;
+}
+.l-ok { color:var(--green); } .l-err { color:#FF6B8A; } .l-proc { color:var(--yellow); }
+
+/* BTNS */
+.btn-row { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.btn {
+  flex:1; min-width:200px; padding:16px 24px; border:none; border-radius:14px;
+  font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:2px;
+  cursor:pointer; transition:all 0.2s; display:none;
+}
+.btn.show { display:block; }
+.btn-start { background:var(--red); color:white; }
+.btn-start:hover:not(:disabled) { background:#e02448; transform:translateY(-1px); }
+.btn-start:disabled { background:#2a1018; color:#444; cursor:not-allowed; }
+.btn-dl { background:var(--green); color:#060608; }
+.btn-dl:hover { background:#26b84a; }
+
+/* SUMMARY */
+.summary {
+  background: linear-gradient(135deg, #0f1a0f, #0a150a);
+  border: 1px solid #30D15825; border-radius:16px;
+  padding:24px; text-align:center; display:none; margin-bottom:20px;
+}
+.summary.show { display:block; }
+.summary-num { font-family:'Bebas Neue',sans-serif; font-size:56px; color:var(--green); line-height:1; }
+.summary-label { font-size:14px; color:var(--muted); margin-top:4px; }
+
+/* INSTRUCOES */
+.instructions {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius:16px; padding:24px; margin-bottom:24px;
+}
+.inst-title { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:2px; color:var(--yellow); margin-bottom:14px; }
+.inst-steps { display:flex; flex-direction:column; gap:10px; }
+.inst-step { display:flex; gap:12px; align-items:flex-start; font-size:13px; color:#b0b0c0; line-height:1.5; }
+.inst-num {
+  background: var(--red); color:white; width:22px; height:22px;
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px;
+}
+.inst-step a { color:var(--yellow); }
+
+canvas { display:none; }
+video#hv { display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">KIYOTAKA <span>DUBLA</span> <span style="font-size:14px;color:var(--muted);letter-spacing:1px">— GERADOR SRT</span></div>
+  <div class="api-wrap">
+    <span class="api-label">API KEY:</span>
+    <input class="api-input" id="apiKey" type="password" placeholder="sk-ant-api03-..." oninput="checkKey()">
+    <div class="api-status" id="apiStatus"></div>
+  </div>
+</header>
+
+<main>
+
+  <div class="instructions" id="instructions">
+    <div class="inst-title">⚡ COMO USAR</div>
+    <div class="inst-steps">
+      <div class="inst-step">
+        <div class="inst-num">1</div>
+        <div>Cola a tua <strong>Anthropic API Key</strong> no campo acima. Pega em <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a> (é grátis cadastrar)</div>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">2</div>
+        <div>Arrasta os <strong>vídeos MP4</strong> aqui embaixo — pode selecionar vários de uma vez</div>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">3</div>
+        <div>Clica em <strong>Gerar SRTs</strong> — ele lê o texto dos quadrinhos e traduz pra PT-BR automaticamente</div>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">4</div>
+        <div>Baixa o <strong>ZIP com todos os SRTs</strong> prontos para importar no CapCut</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="video/*,.mp4,.mov" multiple>
+    <div class="drop-icon">🎬</div>
+    <div class="drop-title">Arrasta os vídeos MP4 aqui</div>
+    <div class="drop-sub">Seleciona vários de uma vez · Lê o texto dos quadrinhos e traduz pra PT-BR</div>
+  </div>
+
+  <div class="file-list" id="fileList"></div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span id="progressText">Processando...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <div class="log-box" id="logBox"></div>
+
+  <div class="btn-row">
+    <button class="btn btn-start show" id="btnStart" onclick="startAll()" disabled>
+      ⏳ SELECIONA OS VÍDEOS PRIMEIRO
+    </button>
+    <button class="btn btn-dl" id="btnDl" onclick="downloadZip()">
+      ⬇️ BAIXAR ZIP COM SRTs
+    </button>
+  </div>
+
+  <div class="summary" id="summary">
+    <div class="summary-num" id="summaryNum">0</div>
+    <div class="summary-label">SRTs gerados com sucesso! Clica em Baixar ZIP acima.</div>
+  </div>
+
+</main>
+
+<canvas id="canvas"></canvas>
+<video id="hv" muted playsinline></video>
+
+<script>
+let files = [];
+let srtResults = {};
+
+// API KEY
+function checkKey() {
+  const key = document.getElementById('apiKey').value.trim();
+  const st = document.getElementById('apiStatus');
+  st.className = 'api-status ' + (key.startsWith('sk-ant') ? 'ok' : (key.length > 10 ? 'err' : ''));
+}
+
+function getKey() { return document.getElementById('apiKey').value.trim(); }
+
+// FILE HANDLING
+const dz = document.getElementById('dropZone');
+const fi = document.getElementById('fileInput');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); addFiles([...e.dataTransfer.files]); });
+fi.addEventListener('change', e => addFiles([...e.target.files]));
+
+function addFiles(newFiles) {
+  newFiles = newFiles.filter(f => f.type.includes('video') || f.name.match(/\.(mp4|mov|avi|mkv|webm)$/i));
+  if (!newFiles.length) return;
+  files = [...files, ...newFiles];
+  renderList();
+  updateBtn();
+}
+
+function renderList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+  files.forEach((f, i) => {
+    const d = document.createElement('div');
+    d.className = 'file-item'; d.id = `fi-${i}`;
+    d.innerHTML = `<span class="file-icon">🎬</span><span class="file-name">${f.name}</span><span class="file-status s-wait" id="fs-${i}">Aguardando</span>`;
+    list.appendChild(d);
+  });
+}
+
+function updateBtn() {
+  const btn = document.getElementById('btnStart');
+  const hasKey = getKey().startsWith('sk-ant') || getKey().length > 20;
+  btn.disabled = files.length === 0 || !hasKey;
+  btn.textContent = files.length > 0
+    ? (hasKey ? `🎬 GERAR ${files.length} SRTs EM PORTUGUÊS` : '🔑 INSERE A API KEY PRIMEIRO')
+    : '⏳ SELECIONA OS VÍDEOS PRIMEIRO';
+}
+
+document.getElementById('apiKey').addEventListener('input', updateBtn);
+
+function setStatus(i, cls, text) {
+  const s = document.getElementById(`fs-${i}`);
+  const f = document.getElementById(`fi-${i}`);
+  if (s) { s.className = `file-status ${cls}`; s.textContent = text; }
+  if (f) { f.className = `file-item ${cls.replace('s-','')} `; }
+}
+
+function log(msg, type='') {
+  const b = document.getElementById('logBox');
+  b.style.display = 'block';
+  const l = document.createElement('div');
+  if (type) l.className = `l-${type}`;
+  l.textContent = msg;
+  b.appendChild(l);
+  b.scrollTop = b.scrollHeight;
+}
+
+function setProgress(done, total) {
+  const pct = Math.round((done/total)*100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressText').textContent = `Processando ${done} de ${total}...`;
+}
+
+// FRAME EXTRACTION
+function extractFrames(file, n=10) {
+  return new Promise(resolve => {
+    const video = document.getElementById('hv');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const url = URL.createObjectURL(file);
+    const frames = [];
+
+    video.src = url;
+    video.onloadedmetadata = () => {
+      const dur = video.duration;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 360;
+      const times = Array.from({length:n}, (_,i) => (i/(n-1)) * dur * 0.95);
+      let idx = 0;
+
+      function next() {
+        if (idx >= times.length) { URL.revokeObjectURL(url); resolve(frames); return; }
+        video.currentTime = times[idx];
+        video.onseeked = () => {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          frames.push({ time: times[idx], dur, b64: canvas.toDataURL('image/jpeg', 0.75).split(',')[1] });
+          idx++; next();
+        };
+      }
+      next();
+    };
+    video.onerror = () => { URL.revokeObjectURL(url); resolve([]); };
+  });
+}
+
+// PROCESS ONE VIDEO
+async function processVideo(file, index) {
+  setStatus(index, 's-proc', '⏳ Extraindo frames...');
+  log(`▶ ${file.name}`, 'proc');
+
+  const frames = await extractFrames(file, 10);
+  if (!frames.length) throw new Error('Não foi possível extrair frames');
+
+  const dur = frames[0]?.dur || 20;
+  setStatus(index, 's-proc', '🤖 Lendo quadrinhos...');
+
+  const imgContent = frames.flatMap((f, i) => [
+    { type:'text', text:`Frame ${i+1} (${f.time.toFixed(1)}s / ${dur.toFixed(1)}s total):` },
+    { type:'image', source:{ type:'base64', media_type:'image/jpeg', data:f.b64 } }
+  ]);
+
+  const name = file.name.replace(/\.[^.]+$/, '');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': getKey(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      system: `Você é especialista em criar legendas SRT para dublagem de animações do Junkzero em PT-BR.
+
+Analise os frames. São quadrinhos com texto em inglês nos balões de fala.
+
+Leia TODOS os textos dos balões em ordem e retorne APENAS JSON válido sem markdown:
+{
+  "falas": [
+    {
+      "id": 1,
+      "inicio": "00:00:00,000",
+      "fim": "00:00:02,500",
+      "en": "texto original do balão em inglês",
+      "pt": "tradução natural PT-BR para dublagem em voz alta"
+    }
+  ]
+}
+
+Regras:
+- Distribui timecodes proporcionalmente pela duração total (${dur.toFixed(1)}s)
+- PT-BR coloquial e natural para falar em voz alta
+- Preserva duplo sentido e humor do Junkzero
+- Formato HH:MM:SS,mmm obrigatório`,
+      messages: [{
+        role: 'user',
+        content: [
+          ...imgContent,
+          { type:'text', text:`Vídeo: "${name}" | Duração: ${dur.toFixed(1)}s. Lê todos os balões de fala dos quadrinhos e retorna o JSON com os SRTs em PT-BR.` }
+        ]
+      }]
+    })
+  });
+
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+
+  const raw = data.content.map(b => b.text||'').join('');
+  const match = raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Resposta inválida da API');
+
+  const parsed = JSON.parse(match[0]);
+  const falas = parsed.falas || [];
+  if (!falas.length) throw new Error('Nenhuma fala detectada');
+
+  const srt = falas.map((f,i) => `${i+1}\n${f.inicio} --> ${f.fim}\n${f.pt}`).join('\n\n') + '\n';
+  srtResults[name] = srt;
+
+  setStatus(index, 's-done', `✅ ${falas.length} falas`);
+  log(`✅ ${file.name} — ${falas.length} falas`, 'ok');
+}
+
+// START ALL
+async function startAll() {
+  if (!files.length || !getKey()) return;
+
+  const btn = document.getElementById('btnStart');
+  btn.disabled = true;
+  btn.textContent = '⏳ PROCESSANDO...';
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('instructions').style.display = 'none';
+  srtResults = {};
+
+  let done = 0, errors = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    setProgress(i, files.length);
+    try {
+      await processVideo(files[i], i);
+      done++;
+    } catch(e) {
+      setStatus(i, 's-err', '❌ Erro');
+      log(`❌ ${files[i].name}: ${e.message}`, 'err');
+      errors++;
+    }
+  }
+
+  setProgress(files.length, files.length);
+  document.getElementById('summaryNum').textContent = done;
+  document.getElementById('summary').classList.add('show');
+  document.getElementById('btnDl').classList.add('show');
+  btn.textContent = `✅ CONCLUÍDO — ${done}/${files.length}`;
+  log(`🎉 Pronto! ${done} SRTs gerados. ${errors} erros.`, 'ok');
+}
+
+// DOWNLOAD ZIP
+async function downloadZip() {
+  const zip = new JSZip();
+  const folder = zip.folder('SRTs_Kiyotaka_Dubla');
+  Object.entries(srtResults).forEach(([name, content]) => folder.file(`${name}.srt`, content));
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'SRTs_Kiyotaka_Dubla.zip';
+  a.click();
+}
+</script>
+</body>
+</html>
