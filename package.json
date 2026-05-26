@@ -1,0 +1,30 @@
+{
+  "name": "kiyotaka-srt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:44871/git/voideternaldubs-blip/kiyotaka-srt"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@babylonjs/core": "^9.9.1",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@splinetool/react-spline": "^4.1.0",
+    "@studio-freight/lenis": "^1.0.42",
+    "@theatre/core": "^0.7.2",
+    "@theatre/r3f": "^0.7.2",
+    "babel-plugin-glsl": "^1.0.0",
+    "framer-motion": "^12.40.0",
+    "gsap": "^3.15.0",
+    "pixi.js": "^8.18.1",
+    "three": "^0.184.0"
+  }
+}
