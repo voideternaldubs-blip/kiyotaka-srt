@@ -1,7 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/", "destination": "/portal-ayslla.html" }
-  ],
+  "framework": "nextjs",
   "headers": [
     {
       "source": "/(.*)",
